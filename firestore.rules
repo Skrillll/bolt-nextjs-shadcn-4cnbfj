@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    function isCollaborator(todoData) {
+      return request.auth.uid in todoData.collaborators;
+    }
+    
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && isOwner(userId);
+    }
+    
+    match /todos/{todoId} {
+      allow read: if isSignedIn() && (isOwner(resource.data.userId) || isCollaborator(resource.data));
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn() && (isOwner(resource.data.userId) || isCollaborator(resource.data));
+      
+      match /subTasks/{subTaskId} {
+        allow read: if isSignedIn() && (isOwner(get(/databases/$(database)/documents/todos/$(todoId)).data.userId) || isCollaborator(get(/databases/$(database)/documents/todos/$(todoId)).data));
+        allow write: if isSignedIn() && (isOwner(get(/databases/$(database)/documents/todos/$(todoId)).data.userId) || isCollaborator(get(/databases/$(database)/documents/todos/$(todoId)).data));
+      }
+    }
+  }
+}
